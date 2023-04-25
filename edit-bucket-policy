@@ -25,7 +25,7 @@ tmp() {
 }
 
 edit() {
-  for command in editor vi nano; do
+  for command in "${VISUAL-}" "${EDITOR-}" editor vi nano; do
     if command -v "$command" >/dev/null; then
       "$command" -- "$1"
       return
