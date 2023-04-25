@@ -37,7 +37,11 @@ policy="$(getPolicy "$bucket" | jq)"
 policy2="$policy"
 
 if test "$user"; then
-  tenant="${tenant:-$(s3api list-buckets | jq -r .Owner.ID)}"
+  tenant="${tenant:-$(s3api get-bucket-acl --bucket "$bucket" | jq -r .Owner.ID)}"
+  if ! test "$tenant"; then
+    echo "Error: could not determine tenant ID automatically"
+    exit 1
+  fi
   user="arn:aws:iam::$tenant:user/$user"
 
   policy2="$(printf %s "$policy" | bucket="$bucket" user="$user" jq '.Statement += [{
