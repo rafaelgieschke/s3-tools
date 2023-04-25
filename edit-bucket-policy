@@ -1,0 +1,69 @@
+#!/bin/sh -eu
+
+bucket="$1"
+user="${2-}"
+tenant="${3-}"
+
+s3api() {
+  # See https://github.com/boto/boto3/pull/2746
+  aws s3api --endpoint-url "$AWS_ENDPOINT_URL" "$@"
+}
+
+getPolicy() {
+  policy="$(s3api get-bucket-policy --bucket "$1" | jq -r ".Policy")"
+  : "${policy:="{\"Statement\":[]}"}"
+  printf '%s\n' "$policy"
+}
+
+putPolicy() {
+  # printf '%s\n' "$2" | s3api put-bucket-policy --bucket "$1" --policy file:///dev/stdin
+  s3api put-bucket-policy --bucket "$1" --policy "$2"
+}
+
+tmp() {
+  mktemp -t -- "$(printf %s "$1" | tr / -).tmp.XXXXXXXXXX"
+}
+
+edit() {
+  for command in editor vi nano; do
+    if command -v "$command" >/dev/null; then
+      "$command" -- "$1"
+      return
+    fi
+  done
+}
+
+policy="$(getPolicy "$bucket" | jq)"
+policy2="$policy"
+
+if test "$user"; then
+  tenant="${tenant:-$(s3api list-buckets | jq -r .Owner.ID)}"
+  user="arn:aws:iam::$tenant:user/$user"
+
+  policy2="$(printf %s "$policy" | bucket="$bucket" user="$user" jq '.Statement += [{
+    "Action": "s3:*",
+    "Effect": "Allow",
+    "Resource": [
+      "arn:aws:s3:::" + $ENV.bucket,
+      "arn:aws:s3:::" + $ENV.bucket + "/*"
+    ],
+    "Principal": {
+      "AWS": $ENV.user
+    }
+  }]')"
+fi
+
+file="$(tmp "$bucket")"
+file2="$(tmp "$bucket")"
+printf '%s\n' "$policy" >"$file"
+printf '%s\n' "$policy2" >"$file2"
+edit "$file2"
+policy2="$(cat -- "$file2")"
+
+if test "$policy" != "$policy2"; then
+  # printf '%s\n' "$policy2"
+  diff -u -- "$file" "$file2" || :
+  putPolicy "$bucket" "$policy2"
+fi
+
+# rm -- "$file" "$file2"
