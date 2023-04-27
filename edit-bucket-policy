@@ -3,21 +3,52 @@
 bucket="$1"
 user="${2-}"
 tenant="${3-}"
+type="${4-policy}"
 
 s3api() {
   # See https://github.com/boto/boto3/pull/2746
   aws s3api --endpoint-url "$AWS_ENDPOINT_URL" "$@"
 }
 
-getPolicy() {
-  policy="$(s3api get-bucket-policy --bucket "$1" | jq -r ".Policy")"
-  : "${policy:="{\"Statement\":[]}"}"
-  printf '%s\n' "$policy"
+default_policy='{
+  "Statement": []
+}
+'
+
+default_cors='{
+  "CORSRules": [
+    {
+      "AllowedHeaders": [
+      ],
+      "AllowedMethods": [
+      ],
+      "AllowedOrigins": [
+      ],
+      "ExposeHeaders": [
+      ],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+'
+
+getConfig() {
+  config="$(s3api get-bucket-"$1" --bucket "$2" || :)"
+  case "$1" in
+  policy)
+    config="$(printf %s "$config" | jq -r ".Policy")"
+    : "${config:="$default_policy"}"
+    ;;
+  cors)
+    : "${config:="$default_cors"}"
+    ;;
+  esac
+  printf '%s\n' "$config"
 }
 
-putPolicy() {
-  # printf '%s\n' "$2" | s3api put-bucket-policy --bucket "$1" --policy file:///dev/stdin
-  s3api put-bucket-policy --bucket "$1" --policy "$2"
+putConfig() {
+  # printf '%s\n' "$3" | s3api put-bucket-"$1" --bucket "$2" --"$1" file:///dev/stdin
+  s3api put-bucket-"$1" --bucket "$2" --"$1" "$3"
 }
 
 tmp() {
@@ -33,7 +64,7 @@ edit() {
   done
 }
 
-policy="$(getPolicy "$bucket" | jq)"
+policy="$(getConfig "$type" "$bucket" | jq)"
 policy2="$policy"
 
 if test "$user"; then
@@ -57,8 +88,8 @@ if test "$user"; then
   }]')"
 fi
 
-file="$(tmp "$bucket")"
-file2="$(tmp "$bucket")"
+file="$(tmp "$bucket.$type.old")"
+file2="$(tmp "$bucket.$type.new")"
 printf '%s\n' "$policy" >"$file"
 printf '%s\n' "$policy2" >"$file2"
 edit "$file2"
@@ -67,7 +98,7 @@ policy2="$(cat -- "$file2")"
 if test "$policy" != "$policy2"; then
   # printf '%s\n' "$policy2"
   diff -u -- "$file" "$file2" || :
-  putPolicy "$bucket" "$policy2"
+  putConfig "$type" "$bucket" "$policy2"
 fi
 
 # rm -- "$file" "$file2"
