@@ -1,0 +1,99 @@
+#!/bin/sh -eu
+
+case "${0##*/}" in
+sh | -sh | bash | -bash | dash | -dash) ;;
+*)
+
+  if test "${1-}" = "config"; then
+    if test "${3-}"; then
+      AWS_ENDPOINT_URL="$3"
+      AWS_SECRET_ACCESS_KEY="${AWS_ENDPOINT_URL%%://*}"
+      AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL#*://}"
+      AWS_ACCESS_KEY_ID="${AWS_ENDPOINT_URL%%@*}"
+      AWS_ENDPOINT_URL="$AWS_SECRET_ACCESS_KEY://${AWS_ENDPOINT_URL#*@}"
+      AWS_SECRET_ACCESS_KEY="${AWS_ACCESS_KEY_ID#*:}"
+      AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID%%:*}"
+    fi
+
+    set -C
+    cat <<EOF >"${2-/dev/stdout}"
+#!/bin/sh
+
+export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL-}
+export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID-}
+export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY-}
+export AWS_REGION=${AWS_REGION=}
+
+. "\$(PATH="\$(dirname -- "\$(realpath -- "\${BASH_SOURCE-\$0}")"):\$PATH" command -v s3-shell)"
+EOF
+    if test "${2-}"; then
+      chmod +x "$2"
+    fi
+    exit 0
+  fi
+  ;;
+esac
+
+export AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION
+
+export RCLONE_S3_ENDPOINT="$AWS_ENDPOINT_URL"
+export RCLONE_S3_ENV_AUTH="true"
+if test "${AWS_REGION-}"; then
+  export RCLONE_S3_REGION="$AWS_REGION"
+fi
+
+# https://github.com/minio/mc/blob/master/docs/minio-client-complete-guide.md#specify-temporary-host-configuration-through-environment-variable
+export MC_HOST_s3="${AWS_ENDPOINT_URL%%://*}://$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY@${AWS_ENDPOINT_URL#*://}"
+
+alias aws='aws --endpoint-url "$AWS_ENDPOINT_URL"'
+alias goofys='goofys --endpoint "$AWS_ENDPOINT_URL"'
+
+case "${0##*/}" in
+sh | -sh | bash | -bash | dash | -dash) return 0 ;;
+esac
+
+if ! test "${1-}"; then
+  cat <<EOF
+AWS_ENDPOINT_URL: $AWS_ENDPOINT_URL
+AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+AWS_REGION: $AWS_REGION
+
+Usage:
+
+$0 aws s3 ls s3://...
+$0 rclone lsd :s3://...
+$0 mc ls s3//...
+$0 goofys ...
+
+. $0
+$0 bash
+
+$0 config [FILENAME]
+$0 url
+$0 env
+EOF
+  exit 2
+fi
+
+case "${1##*/}" in
+url)
+  set -- printf '%s\n' "$MC_HOST_s3"
+  ;;
+bash)
+  export _s3_shell="$0"
+  set -- bash -c "exec bash --init-file <(echo '. \"\$_s3_shell\"')"
+  ;;
+aws)
+  cmd="$1"
+  shift
+  # See https://github.com/boto/boto3/pull/2746
+  set -- "$cmd" --endpoint-url "$AWS_ENDPOINT_URL" "$@"
+  ;;
+goofys)
+  cmd="$1"
+  shift
+  set -- "$cmd" --endpoint "$AWS_ENDPOINT_URL" "$@"
+  ;;
+esac
+
+exec "$@"
