@@ -1,0 +1,3 @@
+#!/bin/sh -eu
+
+exec aws s3api get-bucket-policy --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$1"

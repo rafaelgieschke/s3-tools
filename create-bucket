@@ -1,0 +1,3 @@
+#!/bin/sh -xeu
+
+exec aws s3api --endpoint-url "$AWS_ENDPOINT_URL" create-bucket --create-bucket-configuration "LocationConstraint=$AWS_REGION" --bucket "$1"
