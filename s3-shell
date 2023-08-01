@@ -26,7 +26,7 @@ sh | -sh | bash | -bash | dash | -dash) ;;
 export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL-}
 export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID-}
 export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY-}
-export AWS_REGION=${AWS_REGION=}
+$(if ! test "${AWS_REGION-}"; then printf '# '; fi)export AWS_REGION=${AWS_REGION-}
 
 . "\$(PATH="\$(dirname -- "\$(realpath -- "\${BASH_SOURCE-\$0}")"):\$PATH" command -v s3-shell)"
 EOF
