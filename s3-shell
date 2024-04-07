@@ -26,7 +26,7 @@ sh | -sh | bash | -bash | dash | -dash) ;;
 export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL-}
 export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID-}
 export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY-}
-$(if ! test "${AWS_REGION-}"; then printf '# '; fi)export AWS_REGION=${AWS_REGION-}
+$(if ! test "${AWS_DEFAULT_REGION-${AWS_REGION-}}"; then printf '# '; fi)export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION-${AWS_REGION-}}
 
 . "\$(PATH="\$(dirname -- "\$(realpath -- "\${BASH_SOURCE-\$0}")"):\$PATH" command -v s3-shell)"
 EOF
@@ -38,12 +38,12 @@ EOF
   ;;
 esac
 
-export AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION
+export AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION
 
 export RCLONE_S3_ENDPOINT="$AWS_ENDPOINT_URL"
 export RCLONE_S3_ENV_AUTH="true"
-if test "${AWS_REGION-}"; then
-  export RCLONE_S3_REGION="$AWS_REGION"
+if test "${AWS_DEFAULT_REGION-}"; then
+  export RCLONE_S3_REGION="$AWS_DEFAULT_REGION"
 fi
 
 # https://github.com/minio/mc/blob/master/docs/minio-client-complete-guide.md#specify-temporary-host-configuration-through-environment-variable
@@ -63,7 +63,7 @@ if ! test "${1-}"; then
   cat <<EOF
 AWS_ENDPOINT_URL: $AWS_ENDPOINT_URL
 AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
-AWS_REGION: ${AWS_REGION-}
+AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION-}
 
 Usage:
 
